@@ -117,7 +117,7 @@ wilcox_effsize(write ~1,data=hsb2,mu=50)#de nuevo da una diferencia pequeña
 #representamos el resultado 
 gghistostats(x=write,data=hsb2,test.value = 50,type = "nonparametric",centrality.parameter = "nonparametric",test.value.size=TRUE,test.value.line=TRUE,bf.message=FALSE_)
 
-## Tsudent para 2 mustras independientes
+## Tsudent para 2 mustras independientes ###############
 hsb2 %>% group_by(gender) %>% get_summary_stats(write, type="mean_sd") #get_summary_stats es de ggpub
 ggboxplot(x="gender", y="write",data=hsb2, add=c("mean"), add.params = list(color="red"))
 #evaluando los supuestos: una prueba paramétrica asume q no hay outliers, y normalidad
@@ -135,8 +135,8 @@ t_test(write ~gender , data=hsb2, var.equal = FALSE)# p<0.05 -> no iguales
 cohens_d(write ~ gender, data = hsb2)# tamaño 0.5 es moderado
 #para comunicar los resultados hacemos un daigrama de cajas modificado
 ggbetweenstats(x=gender, y=write, data = hsb2, bf.message = FALSE) 
-#+   theme(text = element_text(size=8), plot.subtitle = element_text(size=8))
-#+   #Cuando hay OUTLIERS usaremos la prueba ROBUSTA de YUEN : pruebas apramétricas de medias recortadas
+
+#Cuando hay OUTLIERS usaremos la prueba ROBUSTA de YUEN : pruebas apramétricas de medias recortadas
 ##vemos la diferencia en la media rcortada. Aqui la prueba va a ser BILATERAL (decimos simplemente
 #+#q es DIFERENTE, sin especificar direccion
 #+#exploracion
@@ -144,17 +144,69 @@ hsb2 %>%  group_by(gender) %>% filter(between(write,
                                               quantile(write,0.1),
                                               quantile(write,0.9))) %>% 
   get_summary_stats(write,type = "mean_sd")
+#diagrama box
+hsb2_recortado <- hsb2 %>%  group_by(gender) %>%  filter(between(write,
+                                               quantile(write, 0.1),
+                                               quantile(write, 0.9))) 
+ggboxplot(data=hsb2_recortado,x="gender", y="write", add=c("mean"), add.params = list(color="red"))
+#evaluamos de nuevo los supuestos del modelo.
+#prueba de levene -> igualdad de varianzas entre dos variables
+hsb2_filtrado <- hsb2 %>%  filter(between(write,quantile(write,0.1),quantile(write,0.9)))
+#hsb2 %>%  filter(between(write,quantile(write,0.1),quantile(write,0.9))) %>% levene_test(write ~ gender)
+hsb2_filtrado  %>% levene_test(write ~ gender) #ojo el levene mete la separacion en la fucion
+#shapiro test: normalida d de la distribuciones. No se cumple
+hsb2_recortado %>% shapiro_test(write) #para el shapiro tenemos q meterla antes
+hsb2_filtrado %>% ggqqplot(x= "write", facet.by = "gender")
+# Prueba de Yuen: nos dice si es significativamente difernte o no
+YuenTTest(write ~ gender, data=hsb2) #esta te recorta por defecto el 20% #DescTools# resultado significativo
+#Tamaño del efecto de la prueba de yuen
+library(WRS2)
+yuen.effect.ci(write ~gender, data=hsb2,boot=10) # resulta 0.35: efewcto moderado
+#comunicación de resultado
+ggbetweenstats(x=gender,y=write, data=hsb2, tr=0.2, type="robust", bf.message = FALSE)
+#hay un problema en el gráfico y me está poiendo delta_R^AKP=0.58 en lugar del eta=0.35 del efecto de tamaño calculado justo ants
 
+#### PRUEBAS NO PARAMETRICAS #########
+#cuando los datos no siguen distribución normal usamos pruebas no parametricas y tnemos 2 grupos
+#se llama prueba U de MannWhitney
+#xplorando los datos: calculamos la MEDIANA
+hsb2 %>%  group_by(gender) %>% get_summary_stats(write, type="median")
+#iqr es el rango inter cuartial, y da idea de la varianza
+ggboxplot(x="gender", y="write", data=hsb2, add = c("median"), add.params = list(color="red"))
+#evaluamos los supuestos: supoemos q las distribucioens son simetricas. lo miramos con el histograma
+gghistogram(hsb2, x="write",add="median", rug = TRUE, bins=15, color="gender", fill="gender", palette="Kark2")
+#el test lo hacemos con la funcion wilcox
+wilcox_test(write ~gender,data=hsb2) #esto nos dice qu son DIFERENTES p>0.05
+#tamaño del efecto
+wilcox_effsize(write ~ gender, data=hsb2)# tamaó0.23, small
+#resultados
+ggbetweenstats(x=gender, y=write, data=hsb2, type="np", bf.message = FALSE)
+# de nuevo me esta imprimiendo el r_biserial^rak(0.27) y o el effect size de yuen, q es 0.235
 
-
-
-
-
-
-
-
-
-
-
+########## 2 MUESTRAS RELACIONADAS ###############
+#veamos los resultados en lectura y escritura de los estudiantes (relacionadas pq hay 2 datos x estudiante)
+#Buscamos saber si la media en lectura es diferent a la media en escritura
+#PARAMÉTRICA
+hsb2 %>% dplyr::select(write,read) %>% get_summary_stats(type="mean_sd")
+#para plotar esto en ggplot hay q modificar los datos y ponerlos e formato long
+hsb2_long <- hsb2 %>%  pivot_longer(c(write,read), names_to="test", values_to = "score") %>% arrange(test,id)
+ggboxplot(x="test", y="score", data=hsb2_long, add=c("mean"), add.params = list(color="red"))
+# buscamos aoutliers - recuerda q nos fijamos e la diferencia entre las notas write y read
+hsb2 <- hsb2 %>% mutate(differences=read-write)
+hsb2 %>% identify_outliers(differences)
+# test de normalidad de shapiro
+hsb2 %>% shapiro_test(differences) #no son diferentes a la normalidad
+ggqqplot(hsb2,"differences")
+# queda la de igualdad de dispersion, prueba de levene
+#ojo! como son muetras de los mismos sujetos entendemos que tienen la mima varianza!!
+#me aprece una mierda de suposición ya q al medir cosas diferentes puede estar distribuidas de forma diferente
+hsb2_long %>% levene_test(score ~ test)
+# el test: recuerda poner q estan relacionados
+t_test(score ~test, data=hsb2_long, paired = TRUE ) # 0.3 No significativamente diferentes
+#tamaño del efecto
+cohens_d(score ~ test, data=hsb2_long, paired = TRUE) #negligible
+#presentacion. Al ser relacionadas usamos ggwithinstats
+ggwithinstats(x=test,y=score, data=hsb2_long, bf.message = FALSE)
+#este es aun peor porque no me está escribiendo el mensaje!!
 
 
