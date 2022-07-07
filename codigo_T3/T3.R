@@ -163,7 +163,7 @@ YuenTTest(write ~ gender, data=hsb2) #esta te recorta por defecto el 20% #DescTo
 library(WRS2)
 yuen.effect.ci(write ~gender, data=hsb2,boot=10) # resulta 0.35: efewcto moderado
 #comunicación de resultado
-ggbetweenstats(x=gender,y=write, data=hsb2, tr=0.2, type="robust", bf.message = FALSE)
+ggbetweenstats(x=gender,y=write, data=hsb2, tr=0.2, type="r", bf.message = FALSE)
 #hay un problema en el gráfico y me está poiendo delta_R^AKP=0.58 en lugar del eta=0.35 del efecto de tamaño calculado justo ants
 
 #### PRUEBAS NO PARAMETRICAS #########
@@ -209,4 +209,165 @@ cohens_d(score ~ test, data=hsb2_long, paired = TRUE) #negligible
 ggwithinstats(x=test,y=score, data=hsb2_long, bf.message = FALSE)
 #este es aun peor porque no me está escribiendo el mensaje!!
 
+### PRUEBA ROBUSTA YUEN
+#ara tenemos q filtrar el 20% de extremos
+hsb2 %>%  dplyr::select(write, read) %>% filter_all(all_vars(between(.,quantile(.,.1),quantile(.,.9)))) %>% get_summary_stats()
 
+hsb2_long %>% filter(between(score,
+                        quantile(score, 0.1),
+                        quantile(score, 0.9))) %>% ggboxplot(x="test", y="score", add=c("mean"), add.params = list(color="red"))
+#test shapiro
+hsb2 %>% filter(between(differences,
+                        quantile(differences,0.1),
+                        quantile(differences,0.9))) %>% shapiro_test(differences)
+#qqplot
+hsb2 %>% filter(between(differences,
+                        quantile(differences,0.1),
+                        quantile(differences,0.9))) %>% ggqqplot(x="differences") #no se cumple noramlidad (auqnue sea robusta la normalidad se pide
+#test de yuen
+YuenTTest(x=hsb2$read,y=hsb2$write, paired=TRUE)#YuenTTest(write ~ gender, data=hsb2) # p 0.009 -> diferentes
+YuenTTest(score ~ test, data=hsb2_long, paired = TRUE)
+#chapucerismo extremo, por que seescrib diferente ahora solo por ser relacionadas!?!?!?!?!
+#tamaño del efecto
+dep.effect(x=hsb2$read,y=hsb2$write,tr=0.2,nboot=10)#WRS2; 
+#de aqui nos quedamos con el Est de AKP (-0.06), osea lo q sería un efecto de mierda, no?
+#comunica resultados
+ggwithinstats(x=test, y=score, data=hsb2_long, tr=0.2, type="r", bf.message = FALSE)
+#este si me da bien, me da la delta AKP
+
+###### 2 MUESTRAS RELACIONADAS NO PARAMETRICAS
+hsb2 %>%  dplyr::select(write,read) %>% get_summary_stats(type = "median_iqr")
+ggboxplot(x="test", y="score", data=hsb2_long, add=c("median"), add.params = list(color="red"))
+#supuestos: no outliers, distribucion simetrica
+hsb2 %>% gghistogram(x="differences", y="..density..", fill="steelblue", add_density = TRUE)
+#test wilcox
+wilcox_test(score ~ test, data=hsb2_long, paired = TRUE) #no significativo
+#tamaño efecto
+wilcox_effsize(score ~test, data=hsb2_long, paired = TRUE) # 0.06, small
+#resultados
+ggwithinstats(x=test,y=score, data=hsb2_long, ggstastplot.layer=FALSE, messages=FALSE, typ="np", bf.message = FALSE)
+#de nuevo me sale el r_biserial_rank q es -0.08, en lugarr de0.06
+
+############################
+rm(list = ls())
+library(ggstatsplot)
+library(rstatix)
+library(ggpubr)
+library(DescTools)
+library(WRS2)
+library(tidyverse)
+#######ejercicios obligatorios del T3
+# 1 Impuestos
+datos <- data.frame(name=c("impuestos","servicios"), count=c(624, 1200-624))
+datos
+ggpiestats(datos, x=name, counts=count, bf.message=FALSE)
+#es el 52% suficientemente diferente del 50 con 1.200 datos?
+#la estadistica no de ggpiestats nos dice q no es significativo (P=0.17). 
+#La orueba apra proporcio de una muestra es : La prueba de proporción para una muestra 
+
+#2 genetica y crimen
+Convictions <-matrix(c(2, 10, 15, 3), 
+                     nrow = 2, 
+                     dimnames = list(c("Dizygotic", "Monozygotic"), 
+                                     c("Convicted", "Not convicted")))
+#La prueba de independencia Chi-cuadrado y la prueba de Fisher se utilizan para probar la relación 
+#entre dos variables categóricas. O dicho de otro modo, examina si las filas y columnas de una tabla 
+#de contingencia están asociadas de manera estadísticamente significativa.
+as.data.frame(as.table(Convictions))
+#para comparar las proporciones e dos muetras usamos gráficos de barras
+
+ggbarstats( data = as.data.frame(as.table(Convictions)), 
+            x = Var1, 
+            y = Var2,
+            counts = Freq)
+
+#Otro ejemplo
+M <- as.table(rbind(c(762, 327, 468), c(484,239,477)))
+dimnames(M) <- list(gender=c("M","F"),
+                    party=c("Democrat","Independent", "Republican"))
+M
+ggbarstats(data = as.data.frame(M),
+           x= gender, y = party, counts = Freq,
+           bf.message = FALSE)
+
+C <- as.table(rbind(c(2,15),c(10,3)))
+dimnames(C) <- list(twin=c("Dizygotic", "Monozygotic"),
+                    Crime=c("Convicted", "Not convicted"))
+ggbarstats( data = as.data.frame(C), 
+            x = twin, y = Crime, counts = Freq)
+
+#cuando tenemos pocos datos hay q hacer la prueba de Fisher, pero esa no está en ggstats
+fisher_test(Convictions, alternative = "less")
+#
+#3. Abortos inducidos
+data(infert, package = "datasets") 
+head(infert)
+I <- table(infert$education, infert$induced)
+#tenemos dos variables cualitativas: educacion y abortos,m cada una con tres niveles.para esto se usa ggbar
+ggbarstats(data=infert,x=induced,y=education)
+#¿Cómo saber si ahy correlacion entre ambas variables con 3 categorias?
+#Como queremos comparar las proporciones para más de 2 muestras, utilizamos la prueba de independencia de Chi-cuadrado
+#existe erlacion significativa entre educacion y numero de abortos inducidos, aunque el efecto es pequeño (0.16)
+#Para ver diferencias entre categorias ebemos hacer comparaciones multiples pareadas
+pairwise_prop_test(M)
+#
+
+#4. Artitris
+library(vcd)
+data(Arthritis) 
+head(Arthritis)
+table(Arthritis[which(Arthritis$Treatment=="Treated"),5])
+datos <- Arthritis %>%
+  filter(Treatment == "Treated" & Improved != "Some") %>%
+  mutate(Improved = droplevels(Improved)) #borra la categoría fantasma
+head(datos)
+summary(datos)
+datos %>% group_by(Improved) %>% get_summary_stats(Age, type="mean_sd")
+#outliers
+datos %>% group_by(Improved) %>% identify_outliers(Age)
+#encontramos 2 outliers, creo q tendremos q suar el robusto de yuen
+#levene
+#levene test
+datos %>%  levene_test(Age ~ Improved) #es < 0.05 asi q es ligeramente significativa la diferencias de variabilidad
+#no hemos chequeao si siguen siendo diferentes cuando recortamos los datos
+datos %>% filter(between(Age,quantile(Age,0.1),quantile(Age,0.9))) %>% levene_test(Age ~ Improved) #ahora ya NO son diferentes!!
+#shapiro
+datos %>% group_by(Improved) %>% shapiro_test(Age) #idem
+ggqqplot(datos, x="Age", facet.by = "Improved") # aqui se ve que no es mu normal 
+# quitando outliers
+datos %>% group_by(Improved) %>%  filter(between(Age,
+                                                 quantile(Age, 0.1),
+                                                 quantile(Age, 0.9)))  %>% shapiro_test(Age) # no significativos: normalidad
+
+
+#yo diria q lo mejor es una de Yuen, q es aprametrica pero sin outliers
+#esa se ahce asi:
+YuenTTest(Age ~ Improved, data=datos) #esta te recorta por defecto el 20% #DescTools# resultado significativo
+#Tamaño del efecto de la prueba de yuen
+library(WRS2)
+yuen.effect.ci(Age ~Improved, data=datos,boot=10) # resulta 0.35: efewcto moderado
+#comunicación de resultado
+ggbetweenstats(x=Improved,y=Age, data=datos, tr=0.2, type="r", bf.message = TRUE)
+#hay un problema en el gráfico y me está poiendo delta_R^AKP=0.58 en lugar del eta=0.35 del efecto de tamaño calculado justo ants
+
+#5. Cebada
+library(MASS)
+head(immer)
+#tenemos ahora 2 muestras relacionadas, un mismo sitio con dos medidas cada uno. Hagamos test parametrico, robusto, y no parametrico
+#primero cambiar a formato alrgo
+immer_largo <- immer %>%   pivot_longer(Y1:Y2, names_to = "variable", values_to = "valor") %>% mutate(variable = as.factor(variable))
+summary(immer_largo)
+#las tres pruebas posibles apra dos muestras relacionadas son:
+# outliers
+immer <- immer %>% mutate(differences=Y2-Y1)
+immer %>% identify_outliers(differences) #no hay
+#levene: supuestamente no es necesario al darse por sentado q al ser del mismo sujeto son similares
+immer_largo %>% levene_test(valor ~ variable)#efectivamente son similares p=0.43
+#shaphiro
+immer %>% shapiro_test(differences) #no son diferentes a la normalidad
+ggqqplot(immer,"differences")
+#puesto que no hay outliers, y cumple los supuestos de normalidad (shapiro P=0.079) optaremos por una prueba aprametrica ttest
+ggwithinstats(data = immer_largo, 
+              x = variable,
+              y = valor,
+              type = "p")  #INDICA
