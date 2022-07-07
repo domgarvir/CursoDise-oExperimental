@@ -1,0 +1,151 @@
+---
+title: "Tema 4. DoE. Ejercicios obligatorios"
+author: "Dra. Rosana Ferrero"
+date: "Máxima Formación"
+output: 
+  pdf_document:
+    latex_engine: xelatex
+    toc: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE)
+```
+
+```{r}
+library(tidyverse)
+library(ggstatsplot)
+library(rstatix)
+library(ggpubr)
+library(WRS2)
+```
+
+En el **TEMA 4** del curso DOE has aprendido a analizar respuestas numéricas de experimentos con un solo factor predictor, con el **ANOVA de una vía**, para diseños completamente aleatorizados (CRD). Has visto el caso de muestras independientes y muestras relacionadas. Utilizamos enfoques paramétricos, no paramétricos y robustos, así como pruebas de comparación múltiples post hoc para cada caso y gráficos finales en formato elegante.
+
+
+## Ejercicio 1.
+
+Utiliza los datos coagulation del paquete faraway que contienen 24 tiempos de coagulación de sangre de un experimento donde 24 animales fueron aleatoriamente asignados a 4 dietas diferentes y las muestras se tomaron en orden aleatorio (Box, Hunter & Hunter, 1978). Indica si existen diferencias entre los tiempos de coagulación según la dieta del animal y, en tal caso, cómo son estas diferencias. 
+
+```{r}
+library(faraway)
+data(coagulation)
+head(coagulation)
+summary(coagulation)
+```
+Tenemos una respuesta cuantitativa (tiempos de coagulación) y un predictor cualitativo con 4 niveles (la dieta, que son muestras independientes). Piensa entonces qué prueba de hipótesis tiene sentido realizar. Estudia los supuestos paramétricos y selecciona la versión adecuada de la prueba.  
+
+**Respuesta:** Puesto que tenemos cuatro categorias (dietas) y una variable contínua (coagulación) en muetras no relacionadas (cada valor corresponde a perros diferentes) optaremos por una anova de 1 vía para muestras no relacionadas. La hipótesis nula será que o existe diferencia etre las coagulaciones medias de cada tipo de dieta ($H_0: \mu(d1)=\mu(d2)=\mu(d3)=\mu(d4)$), mientras que la hipótesis alternativa es que algunas de estas medias será diferente. 
+
+Para hacer este test paramétrico tenemos que ver si se cumplen los supuestos: independencia (si), no outliers, normalidad y homogeneidad de varianzas. Veamos cómo.
+
+```{r}
+c_df <- coagulation
+#outliers
+c_df %>%  group_by(diet) %>% identify_outliers(coag) #encuentra 3 outliers, optaremos por pruebas robustas
+c_df %>%  filter(between(coag,quantile(coag,0.1),quantile(coag,0.9))) %>% ggboxplot(x="diet", y="coag")
+
+#normalidad
+fit <- lm(coag ~ diet, data=c_df)
+ggqqplot(residuals(fit))
+shapiro_test(residuals(fit)) #normalidad ok
+
+#homogeneidad de varianza
+plot(fit,1) #los residuos de cada grupo parecen homogeneos
+c_df %>% levene_test(coag ~ diet)#no es significativamente diferente por grupos
+```
+Como hemos encontrado outliers pero los datos cumplen los supuestos de normalidad e igualdad de varianzas podemos hacer una anova robusta de 1 vía. 
+
+```{r}
+#anova test
+#prueba
+t1way(coag ~ diet, data=c_df )# sale significativo
+#para saber entre los grupos que hay diferencia
+lincon(coag ~ diet, data=c_df) #encuentra diferencias
+#resultado
+```
+Esto mismo podríamos haberlo obteido directamente como veremos a contiuación con el plot de ggbetweenstats.
+
+Como estamos comparando muestras independientes, utlizamos el gráfico ggbetweenstats para visualizar los datos. Selecciona el tipo de prueba que corresponde según el análisis de supuestos e indícalo en el argumento:    
+
+```{r}
+ggbetweenstats(data = coagulation,
+               x = diet,
+               y = coag,
+               type = "r",    #INDICA
+               tr=0.2,
+               var.equal = TRUE)   #INDICA
+```
+
+Plantea las hipótesis, interpreta los resultados y el gráfico. **¿Existen diferencias significativas en los tiempos de coagulación según la dieta suministrada?, ¿qué dieta se relaciona con menores tiempos de coagulación?**.
+
+**Respuesta:** La prueba de anova robusta nos indica que podemos rechazar la hipótesis nula (p=5E-4) y que por tanto exise un efecto de la dieta sobre el tiempo de coagulación. El test post-hoc nos muestra que existen diferencias significativas entre todas las dietas menos entre la B y la C, y la A y la D. El tamaño del efecto además es grande (0.84). Es decor, las dietas A y D tienen tiempos de coagulación menores que las dietas B y C.
+
+
+## Ejercicio 2.
+
+Utiliza los datos selfesteem del paquete datarium para evaluar cómo varía la puntuación de autoestima de 10 personas en tres momentos durante una dieta específica para determinar si su autoestima mejoró. Indica si hay diferencias en el nivel de autoestima a lo largo del tiempo y, en tal caso, cómo son estas diferencias.
+
+```{r}
+library(datarium)
+data(selfesteem)
+head(selfesteem)
+summary(selfesteem)
+```
+Tenemos una respuesta cuantitativa (puntuación de autoestima) y un predictor cualitativo con 3 niveles (el tiempo, muestras relacionadas). Piensa entonces qué prueba de hipótesis tiene sentido realizar. Estudia los supuestos paramétricos y selecciona la versión adecuada de la prueba.   
+
+**Respueta:** En este caso tendremos que hacer una prueba anova para variables relacionadas (medimos la autoestima de un mismo sujeto tres veces). Veamos si nuestros datos cumple los supuestos necesarios para hacer una prueba paramétrica, o si por el contrario tendremos que optar por otra. 
+
+
+```{r}
+s_df <- selfesteem
+#primero tenemos que pasarlo a estructura tidy
+s_long <- s_df %>% pivot_longer(c(t1,t2,t3), names_to = "time", values_to= "selfsteem")
+
+#explore and outliers detection
+s_df %>% dplyr::select(t1,t2,t3) %>% get_summary_stats(type="mean_sd")  
+ggboxplot(x="time", y="selfsteem", data=s_long, add=c("mean"), add.params = list(color="red")) # vemos outliers
+#outliers
+s_long %>%  group_by(time) %>%  identify_outliers(selfsteem) #hay 2, auqnue no sean extremos optaremos por una prueba robusta.
+
+#esto significa que tenemos que chequar si cumplen normalidad 
+# supuesto de normalidad
+s_long %>% group_by(time) %>% filter(between(selfsteem,quantile(selfsteem,.1),quantile(selfsteem,.9))) %>%  shapiro_test(selfsteem) # no significativo
+s_long %>% group_by(time) %>% filter(between(selfsteem,quantile(selfsteem,.1),quantile(selfsteem,.9))) %>% ggqqplot("selfsteem", facet.by = "time")
+```
+Puesto que encontramos outliers pero los datos cumplen los supuestos de normalidad optaremos por una prueba paramétrica robusta:
+
+```{r}
+#el test rmanova del WRS2
+rmanova(y=s_long$selfsteem, groups = s_long$time,blocks = s_long$id) #sale  significativo
+#prubas post hoc
+rmmcp(y=s_long$selfsteem, groups = s_long$time ,blocks = s_long$id) #todas significativas
+
+```
+Vemos que aparecen diferencias significativas entre los tres tiempos. Esto mismo podríamos haberlo hecho directament con el gráfico de ggwithinstats.
+
+Como estamos comparando muestras relacionadas utlizamos el gráfico ggwithinstats para visualizar los datos. Recuerda que para utilizar la función ggwithinstats necesitamos ingresar los datos en formato largo, por lo que previamente debes transformarlos. Selecciona el tipo de prueba que corresponde según el análisis de supuestos e indícalo en el argumento:   
+
+
+
+```{r}
+
+#self_largo <- selfesteem %>% 
+#    pivot_longer(t1:t3, names_to = "variable", values_to = "valor") %>%
+#  mutate(variable = as.factor(variable))
+
+#head(self_largo)
+#summary(self_largo)
+
+ggwithinstats(data = s_long,
+               x = time,
+               y = selfsteem,
+               type = "r",    #INDICA
+               var.equal = TRUE) #INDICA
+```
+
+Plantea las hipótesis, interpreta los resultados y el gráfico. **¿Existen diferencias significativas en los niveles de autoestima en el tiempo?**, **¿Qué tiempo se relaciona con mayores valores de autoestima?**.
+
+**Respouesta:** La hipótesis nula será que no existen diferencias significativas de la autoestima en los tres tiempos ($H_0: \mu(t1) = \mu(t2) = \mu(t3)) mientras que la hipótesis alternativa será que alguna de estas medias de autoestima es diferente.
+El test anova robusto para tres categorías resulta significativo (p=6E-4) por lo que podemos descartar la hipótesis nula. El gráfico muestra que existe un crecimiento estadisticamente significativo de la autoestima conforme se desarrolla la dieta ($\mu(t1)<\mu(t2)<\mu(t3)). Aunque en la clase no se ha especificado como interpretar el tamaño del efecto interpretando el gráfico entiendo que debe ser moderado (solamente se han enseñado muestras sin diferencias significativas y no parece que se mencione esto).
+

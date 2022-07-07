@@ -35,7 +35,11 @@ datos
 
 Piensa que aquí evalúas la opinión de los ciudadanos sobre qué prefieren ¿reducir los servicios o aumentar los impuestos? Tienes una única muestra de 1200 personas donde 624 prefieren aumentar los impuestos y el resto prefieren reducir los servicios. Para evaluar cuál es la opción preferida puedes analizar si la proporción de los que prefieren aumentar los impuestos es significativamente mayor al 50%.   
 
-**Entonces tienes 1 muestra y con una respuesta categórica (proporciones), piensa qué prueba de hipótesis podrían utilizar.**   Aquí te enseño el gráfico para 1 variable categórica ggpiestats(), con la prueba de hipótesis correspondiente.
+**Entonces tienes 1 muestra y con una respuesta categórica (proporciones), piensa qué prueba de hipótesis podrían utilizar.** 
+
+**Respuesta**: Prueba igualdad de proporciones Chi-cuadrado.
+
+Aquí te enseño el gráfico para 1 variable categórica ggpiestats(), con la prueba de hipótesis correspondiente.
 
 Fíjate que cuando tenemos los datos como data.fame, con una columna con el conteo, debemos ingresar la frecuencia en el argumento counts:
 
@@ -45,7 +49,8 @@ ggpiestats(datos, x=name, counts=count, bf.message=FALSE)
 
 Plantea las hipótesis de la prueba e interpreta los resultados del gráfico. **¿Existen diferencias significativas entre el % de sujetos que desean reducir los servicios y aquellos que desean aumentar los impuestos? ¿Qué quiere la mayoría?**
 
-**Respuesta:** La prueba de bondad de ajuste para la proporción de una muestra (que usa el chi-cuadrado) da un p-value de 0.17, y un tamaño de efecto de 0.04 por lo que podemos concluir que las diferencias no son significativas del 50\%, y por tanto no hay diferencias significaivas entre ambas preferencias. La mayoria encuestada aboga por subir los impuestos, pero este resultado o es extrapolable a la población general, al no haber una diferencia significativa en la muestra.
+**Respuesta:** Hipótesis nula $H_0:$ P(impuestos)$=$P(servicios)=50\% (ambas opiniones tienen una proporción no significativament diferente de 50\%). Hipótesis alternativa $H_1:$ P(impuestos)>50\% (La proporción de personas favorables a pagar más impuestos es significativaemnte superior al 50\%). 
+La prueba de bondad de ajuste para la proporción de una muestra (que usa el chi-cuadrado) da un p-value de 0.17, y un tamaño de efecto de 0.04 por lo que podemos concluir que las diferencias no son significativamente diferentes del 50\%, y por tanto no hay diferencias significaivas entre ambas preferencias. La mayoria encuestada aboga por subir los impuestos, pero este resultado no es extrapolable a la población general, al no haber una diferencia significativa en la muestra.
 
 ## Ejercicio 2
 Se quiere evaluar un estudio de gemelos del mismo sexo donde un gemelo había tenido una condena penal. Se recopiló la siguiente información: si el hermano también había tenido una condena penal y si los gemelos eran gemelos monocigóticos (idénticos) o dicigóticos (no idénticos). Los estudios de gemelos como este se han utilizado a menudo para investigar los efectos de la "naturaleza versus crianza". 
@@ -120,7 +125,8 @@ En el gráfico se enseña, además de la prueba global de independencia Chi-cuad
 
 Plantea las hipótesis, interpreta los resultados del a prueba y el gráfico.
 
-**Respuesta**: Queremos saber si existe una relación entre el nivel educativo de las mujeres y el número de abortos provocados. La hipotésis nula es que los porcentajes no van a ser diferentes, mientras que la alternativa es que el número de abortos provocados si depende del nivel educativo de la mujer. Mirando el gráfico podemos ver que efectivamente podemos rechazar la hipótesis nula (p=0.002) y que existe una relación entre el nivel educativo y número de abortos provocados, con las mujeres con menor nivel educativo mostrando una mayor proporcion de abortos. El tamaño del efecto, sin embargo, es pequeño, con un valor de 0.16. 
+**Respuesta**: Queremos saber si existe una relación entre el nivel educativo de las mujeres y el número de abortos provocados. La hipotésis nula es que los porcentajes no van a ser diferentes ($H_0=\mu(0-5)=\mu(6-11)=\mu(12+)$, mientras que la alternativa $H_1$ es que el número de abortos provocados si depende del nivel educativo de la mujer. Mirando el gráfico podemos ver que usando la Chi-cuadrado podemos rechazar la hipótesis nula (p=0.002) y que existe una relación entre el nivel educativo y número de abortos provocados, con las mujeres con menor nivel educativo mostrando una mayor proporcion de abortos. El tamaño del efecto, sin embargo, es pequeño, con un valor de 0.16. 
+Sin emabrgo, dado que 2 frecuencias en el nivel educativo 0 están por debajo de 5, quizás sería más conveniente usar la prueba exacta de Fisher en lugar de la aproximación de la Chi-cuadrado.
 
 ## Ejercicio 4
 Utiliza los datos "Arthritis", del paquete "vcd", sobre un ensayo clínico de doble ciego que investiga un nuevo tratamiento para la artritis reumatoide.Tenemos información de 84 observaciones de 5 variables: la identificación del paciente (ID), el tratamiento (Treatment: Placebo, Treated), el sexo (Sex: Female, Male), la edad (Age) y la mejoría (Improved: None, Some, Marked).  
@@ -157,17 +163,16 @@ library(WRS2)
 
 #outliers
 datos %>% group_by(Improved) %>% identify_outliers(Age)
-#puesto que hay outlayers haremos una prueba robusta, para lo que vamos a filtar el 20% estremo
+#puesto que hay outlayers haremos una prueba robusta, para lo que vamos a filtar el 20% extremo
 #levene test
 datos %>% filter(between(Age,quantile(Age,0.1),quantile(Age,0.9))) %>% levene_test(Age ~ Improved) #no diferencia entre varianzas
 #shapiro
 datos %>% group_by(Improved) %>%  filter(between(Age,
                                                  quantile(Age, 0.1),
                                                  quantile(Age, 0.9)))  %>% shapiro_test(Age) # no significativos: normalidad
-#yo diria que lo mejor es un test de Yuen, q es parametrica pero sin outliers
+#yo diria que lo mejor es un test de Yuen, que es parametrica pero sin outliers
 #se hace asi:
 YuenTTest(Age ~ Improved, data=datos) #esta te recorta por defecto el 20% #DescTools# resultado no significativo
-#ggbetweenstats(x=Improved,y=Age, data=datos, tr=0.2, type="r", bf.message = FALSE)
 ```
 Al tener outliers y tener unas distribuciones normales (p-value entre 0.07 y 0.21 en el shapiro test) podemos hacer una prueba de Yuen, que es paramétrica pero no considera a los autliers.
 
@@ -180,7 +185,7 @@ ggbetweenstats(data = datos,
 ```
 Plantea las hipótesis, interpreta los resultados y el gráfico.
 
-**Respuesta:** Queremos saber si la edad de los pacientes afecta a su mejoría. La hipóteis nula es que no habrá efecto de la edad en los dos grupos, es decir que la edad media de los que han mejorado no va a ser significativamente diferente de los que si han mejorado. Despué de hacer el test de Yuen vemos que la diferencia no es significativa (p=0.28), por lo que no podemos rechazar la hipótesis nula: no hemos detectado efecto de la edad en la mejoría.
+**Respuesta:** Queremos saber si la edad de los pacientes afecta a su mejoría. La hipóteis nula es que no habrá efecto de la edad en los dos grupos, es decir que la edad media de los que han mejorado no va a ser significativamente diferente de los que si han mejorado ($H_0$=$\mu$(None)=$\mu$(marked)). Despué de hacer el test de Yuen vemos que la diferencia no es significativa (p=0.28), por lo que no podemos rechazar la hipótesis nula: no hemos detectado efecto de la edad en la mejoría.
 
 ## Ejercicio 5
 Utiliza los datos "immer", del paquete "MASS", sobre el rendimiento de la cebada en los años 1931 y 1932 en un mismo campo de recolección.
@@ -225,4 +230,4 @@ ggwithinstats(data = immer_largo,
 ```
 Plantea las hipótesis, interpreta los resultados y el gráfico.
 
-**Respuesta:** Queremos comprobar si hay un cambio significativo entre la media de la productividad entre la medida 1 y la 2. La hipótesis nula es que no encontraremos diferencias significativas entre las medias en los dos tiempos. El t-test arroja un p-value de 0.002, bastante menor a 0.05, por lo que existe una diferencia significativa. El tamaño del efecto es de 0.59, es decir moderado. Así que podemos concluir que hay un cambio significativo en la productividad, de tamaño moderado.
+**Respuesta:** Queremos comprobar si hay un cambio significativo entre la media de la productividad entre la medida Y1 y la Y2. La hipótesis nula es que no encontraremos diferencias significativas entre las medias en los dos tiempos ($H_0: \mu(Y_1)=\mu(Y_2)$), mientras que la hipótesis alternativa es que las medias de producción no van a ser iguales ($H_1: \mu(Y_1)!=\mu(Y_2)$). El t-test arroja un p-value de 0.002, bastante menor a 0.05, por lo que existe una diferencia significativa. El tamaño del efecto es de 0.59, es decir moderado. Así que podemos concluir que ha habido una reducción significativa, de tamaño moderado, en la productividad de los campos.
